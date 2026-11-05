@@ -25,24 +25,26 @@ ENV CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABI_LINKER=arm-linux-gnueabi-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
 WORKDIR /app
+# Fetch crates into the image once, before the source, so the parallel target
+# stages below share them. A shared registry cache mount races when they unpack
+# the same crates at once.
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && touch src/main.rs && cargo fetch --locked && rm -r src
 COPY . .
 
 FROM base AS armv6
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=target-armv6,target=/app/target \
-    cargo build --release --locked --target arm-unknown-linux-gnueabi \
+RUN --mount=type=cache,id=target-armv6,target=/app/target \
+    cargo build --release --frozen --target arm-unknown-linux-gnueabi \
     && cp target/arm-unknown-linux-gnueabi/release/rustbox /rustbox
 
 FROM base AS armv7
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=target-armv7,target=/app/target \
-    cargo build --release --locked --target armv7-unknown-linux-gnueabihf \
+RUN --mount=type=cache,id=target-armv7,target=/app/target \
+    cargo build --release --frozen --target armv7-unknown-linux-gnueabihf \
     && cp target/armv7-unknown-linux-gnueabihf/release/rustbox /rustbox
 
 FROM base AS aarch64
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=target-aarch64,target=/app/target \
-    cargo build --release --locked --target aarch64-unknown-linux-gnu \
+RUN --mount=type=cache,id=target-aarch64,target=/app/target \
+    cargo build --release --frozen --target aarch64-unknown-linux-gnu \
     && cp target/aarch64-unknown-linux-gnu/release/rustbox /rustbox
 
 FROM scratch
