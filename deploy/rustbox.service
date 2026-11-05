@@ -1,0 +1,23 @@
+[Unit]
+Description=rustbox GPIO API
+# Matter picks its network interface at startup.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/rustbox
+Environment=PORT=3000
+Environment=UI_PORT=8080
+Environment=RUST_LOG=info
+Environment=DATABASE_URL=sqlite:/var/lib/rustbox/rustbox.db
+Environment=MATTER_DIR=/var/lib/rustbox/matter
+# Unprivileged throwaway user; the gpio group grants /dev/gpiomem access.
+DynamicUser=yes
+SupplementaryGroups=gpio
+# Creates /var/lib/rustbox, owned by the service user, persisted across reboots.
+StateDirectory=rustbox
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

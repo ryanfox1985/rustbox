@@ -1,0 +1,11 @@
+target
+.git
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml
+rustbox.db*
+matter
+dist
+.github
+README.md

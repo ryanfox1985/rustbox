@@ -1,0 +1,8 @@
+CREATE TABLE pins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    name TEXT,
+    pin_pi INTEGER,
+    value BOOLEAN DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);

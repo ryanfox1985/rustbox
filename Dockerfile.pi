@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1
+
+# Cross-compiles static Raspberry Pi binaries into dist/, next to the systemd
+# unit that installs them:
+#   docker build -f Dockerfile.pi -o dist .
+#
+#   rustbox-armv6    Pi 1 / Zero
+#   rustbox-armv7    Pi 2, or Pi 3 on a 32-bit OS
+#   rustbox-aarch64  Pi 3 on a 64-bit OS
+#   rustbox.service  systemd unit, see README.md
+#
+# Debian's armhf toolchain targets ARMv7, which the Pi 1 can't run, so ARMv6
+# uses the armel (ARMv5TE) toolchain. Everything links statically.
+FROM --platform=$BUILDPLATFORM rust:1-slim-trixie AS base
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc-arm-linux-gnueabi libc6-dev-armel-cross \
+        gcc-arm-linux-gnueabihf libc6-dev-armhf-cross \
+        gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup target add \
+        arm-unknown-linux-gnueabi armv7-unknown-linux-gnueabihf aarch64-unknown-linux-gnu
+ENV CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABI_LINKER=arm-linux-gnueabi-gcc \
+    CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
+WORKDIR /app
+COPY . .
+
+FROM base AS armv6
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=target-armv6,target=/app/target \
+    cargo build --release --locked --target arm-unknown-linux-gnueabi \
+    && cp target/arm-unknown-linux-gnueabi/release/rustbox /rustbox
+
+FROM base AS armv7
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=target-armv7,target=/app/target \
+    cargo build --release --locked --target armv7-unknown-linux-gnueabihf \
+    && cp target/armv7-unknown-linux-gnueabihf/release/rustbox /rustbox
+
+FROM base AS aarch64
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=target-aarch64,target=/app/target \
+    cargo build --release --locked --target aarch64-unknown-linux-gnu \
+    && cp target/aarch64-unknown-linux-gnu/release/rustbox /rustbox
+
+FROM scratch
+COPY --from=armv6 /rustbox /rustbox-armv6
+COPY --from=armv7 /rustbox /rustbox-armv7
+COPY --from=aarch64 /rustbox /rustbox-aarch64
+COPY deploy/rustbox.service /rustbox.service
